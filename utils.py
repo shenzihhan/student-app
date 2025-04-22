@@ -10,10 +10,8 @@ SAVE_DIR = "frames"
 API_ENDPOINT = "https://your-api-url.onrender.com/upload"
 os.makedirs(SAVE_DIR, exist_ok=True)
 
-def analyze_emotion_and_upload():
+def analyze_emotion_and_upload(record_seconds=30, frame_interval=5):
     emotion_counts = {}
-    capture_duration = 30  # seconds
-    interval = 5  # seconds
     start_time = time.time()
 
     cap = cv2.VideoCapture(0)
@@ -25,14 +23,14 @@ def analyze_emotion_and_upload():
     frame_id = 0
     while True:
         elapsed = time.time() - start_time
-        if elapsed >= capture_duration:
+        if elapsed >= record_seconds:
             break
 
         ret, frame = cap.read()
         if not ret:
             continue
 
-        if int(elapsed) % interval == 0:
+        if int(elapsed) % frame_interval == 0:
             frame_path = os.path.join(SAVE_DIR, f"frame_{frame_id}.jpg")
             cv2.imwrite(frame_path, frame)
 
@@ -45,13 +43,13 @@ def analyze_emotion_and_upload():
                 print(f"Emotion analysis failed: {e}")
 
             frame_id += 1
-            time.sleep(1)  # slight buffer to avoid double captures
+            time.sleep(1)
 
     cap.release()
     cv2.destroyAllWindows()
 
     # Upload to API
-    payload = {"student_id": "student_001", "emotions": emotion_counts}
+    payload = {"student": "student_001", "timestamp": datetime.now().isoformat(), "emotions": emotion_counts}
     try:
         res = requests.post(API_ENDPOINT, json=payload)
         if res.status_code == 200:
