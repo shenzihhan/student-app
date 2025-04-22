@@ -10,7 +10,7 @@ import requests
 API_ENDPOINT = "https://student-api-emk4.onrender.com/upload"
 
 # WebRTC ICE config
-RTC_CONFIGURATION = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"}]}
+RTC_CONFIGURATION = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 
 # Emotion Detection Processor
 class EmotionProcessor(VideoProcessorBase):
