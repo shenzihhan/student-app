@@ -1,6 +1,6 @@
 FROM python:3.10-slim
 
-# 安裝系統依賴
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 COPY . .
 
-# 安裝 Python 套件
+# Install Python packages
 RUN pip install --upgrade pip
 RUN pip install -r requirements.txt
 
