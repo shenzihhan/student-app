@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, ClientSettings
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import av
 import numpy as np
 from deepface import DeepFace
@@ -11,7 +11,6 @@ API_ENDPOINT = "https://student-api-emk4.onrender.com/upload"
 
 # WebRTC Setting
 RTC_CONFIGURATION = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-client_settings = ClientSettings(rtc_configuration=RTC_CONFIGURATION)
 
 class EmotionProcessor(VideoProcessorBase):
     def __init__(self):
@@ -63,7 +62,6 @@ if st.button("Start Emotion Analysis"):
     # Activate Camera
     webrtc_ctx = webrtc_streamer(
         key="emotion",
-        client_settings=client_settings,
         video_processor_factory=lambda: st.session_state.processor,
         media_stream_constraints={"video": True, "audio": False},
         async_processing=True
