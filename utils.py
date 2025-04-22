@@ -1,26 +1,24 @@
-import cv2
+from datetime import datetime
 import os
 import time
+import cv2
 import requests
-import numpy as np
 from deepface import DeepFace
-from PIL import Image
 
 SAVE_DIR = "frames"
-API_ENDPOINT = "https://your-api-url.onrender.com/upload"
+API_ENDPOINT = "https://student-api-emk4.onrender.com/upload"
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 def analyze_emotion_and_upload(record_seconds=30, frame_interval=5):
     emotion_counts = {}
     start_time = time.time()
+    frame_id = 0
 
     cap = cv2.VideoCapture(0)
-
     if not cap.isOpened():
         print("Cannot open camera")
         return
 
-    frame_id = 0
     while True:
         elapsed = time.time() - start_time
         if elapsed >= record_seconds:
@@ -48,8 +46,11 @@ def analyze_emotion_and_upload(record_seconds=30, frame_interval=5):
     cap.release()
     cv2.destroyAllWindows()
 
-    # Upload to API
-    payload = {"student": "student_001", "timestamp": datetime.now().isoformat(), "emotions": emotion_counts}
+    payload = {
+        "student": "student_001",
+        "timestamp": datetime.now().isoformat(),
+        "emotions": emotion_counts,
+    }
     try:
         res = requests.post(API_ENDPOINT, json=payload)
         if res.status_code == 200:
