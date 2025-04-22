@@ -7,7 +7,7 @@ from deepface import DeepFace
 from PIL import Image
 
 SAVE_DIR = "frames"
-API_ENDPOINT = "https://your-render-api-url.com/upload" 
+API_ENDPOINT = "https://student-api-emk4.onrender.com/upload" 
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 def analyze_emotion_and_upload():
