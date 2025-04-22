@@ -1,28 +1,11 @@
 import streamlit as st
-import cv2
-import requests
-from deepface import DeepFace
+from utils import analyze_emotion_and_upload
 
-st.title("Student Emotion Uploader")
+st.set_page_config(page_title="Student Emotion App", layout="centered")
+st.title("Emotion Detection - Student")
 
-api_url = st.text_input("Enter API endpoint (e.g., http://xxxxxx.ngrok.io/upload)", "")
+st.markdown("Please turn on your camera. The system will analyze your emotion and upload the result.")
 
-frame_window = st.image([])
-camera = cv2.VideoCapture(0)
-
-if st.button("Capture and Upload"):
-    ret, frame = camera.read()
-    if ret:
-        frame_window.image(frame, channels="BGR")
-        try:
-            result = DeepFace.analyze(frame, actions=['emotion'], enforce_detection=False)
-            emotion = result[0]['dominant_emotion']
-            student_id = st.text_input("Your Student ID", "student_001")
-
-            data = {"student_id": student_id, "emotion": emotion}
-            res = requests.post(f"{api_url}/upload", json=data)
-            st.success(f"Uploaded: {emotion}, Response: {res.status_code}")
-        except Exception as e:
-            st.error(f"Error: {e}")
-    else:
-        st.error("Failed to capture frame.")
+if st.button("Start Emotion Analysis"):
+    analyze_emotion_and_upload()
+    st.success("Analysis complete and sent to server.")
