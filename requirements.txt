@@ -3,5 +3,4 @@ opencv-python-headless==4.8.0.76
 deepface==0.0.93
 tensorflow==2.11.0
 keras==2.11.0
-protobuf==3.19.6
 requests
