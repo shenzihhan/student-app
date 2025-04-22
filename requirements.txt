@@ -1,6 +1,6 @@
 streamlit==1.32.2
+tensorflow==2.16.1
+keras==3.3.3
 opencv-python-headless==4.8.0.76
 deepface==0.0.93
 requests
-tensorflow==2.11.0
-keras==2.11.0
