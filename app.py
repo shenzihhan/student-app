@@ -1,72 +1,97 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration
-import av
-import cv2
-import numpy as np
 import time
-import requests
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, ClientSettings
+import av
+import numpy as np
 from deepface import DeepFace
+import requests
+import cv2
 
 API_ENDPOINT = "https://student-api-emk4.onrender.com/upload"
 
-# RTC Config to avoid ICE/stun errors
-rtc_config = RTCConfiguration({"iceServers": []})
+# WebRTC Setting
+RTC_CONFIGURATION = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+client_settings = ClientSettings(rtc_configuration=RTC_CONFIGURATION)
 
-# Store emotions to upload later
-emotion_counts = {}
-record_seconds = 30
-frame_interval = 5
-
-class EmotionAnalyzer(VideoTransformerBase):
+class EmotionProcessor(VideoProcessorBase):
     def __init__(self):
-        self.start_time = time.time()
-        self.last_capture_time = 0
-        self.frame_count = 0
+        self.frames = []
+        self.last_capture_time = time.time()
 
-    def transform(self, frame: av.VideoFrame) -> np.ndarray:
-        global emotion_counts
+    def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         now = time.time()
-
-        # Capture and analyze every frame_interval seconds
-        if now - self.last_capture_time > frame_interval:
+        # 每 5 秒擷取一張
+        if now - self.last_capture_time >= 5 and len(self.frames) < 6:
+            self.frames.append(img)
             self.last_capture_time = now
-            try:
-                result = DeepFace.analyze(img, actions=['emotion'], enforce_detection=False)
-                dominant = result[0]['dominant_emotion'] if isinstance(result, list) else result['dominant_emotion']
-                emotion_counts[dominant] = emotion_counts.get(dominant, 0) + 1
-                print(f"Captured emotion: {dominant}")
-            except Exception as e:
-                print("Analysis error:", e)
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-        # Stop after record_seconds
-        if now - self.start_time > record_seconds:
-            st.session_state.finished = True
+def analyze_emotions(frames):
+    results = []
+    for img in frames:
+        try:
+            analysis = DeepFace.analyze(img, actions=['emotion'], enforce_detection=False)
+            emotion = analysis[0]['dominant_emotion']
+            results.append(emotion)
+        except:
+            results.append("error")
+    return results
 
-        return img
+def upload_to_api(emotion_results):
+    data = {"emotions": emotion_results}
+    try:
+        response = requests.post(API_ENDPOINT, json=data)
+        return response.status_code == 200
+    except Exception as e:
+        return False
 
-st.set_page_config(page_title="Student Emotion App", layout="centered")
-st.title("Emotion Detection - Student")
-
+# UI Surface
+st.set_page_config(page_title="Emotion Detection - Student")
+st.title("🎓 Emotion Detection - Student")
 st.markdown("The system will use your webcam to analyze your emotion over 30 seconds. Please stay visible on camera.")
 
-if "finished" not in st.session_state:
-    st.session_state.finished = False
+# Video Capturing
+if "recording" not in st.session_state:
+    st.session_state.recording = False
 
 if st.button("Start Emotion Analysis"):
-    emotion_counts = {}  # Reset
-    webrtc_streamer(
-        key="emotion-demo",
-        video_transformer_factory=EmotionAnalyzer,
-        rtc_configuration=rtc_config,
+    st.session_state.recording = True
+    st.session_state.start_time = time.time()
+    st.session_state.processor = EmotionProcessor()
+
+    # Activate Camera
+    webrtc_ctx = webrtc_streamer(
+        key="emotion",
+        client_settings=client_settings,
+        video_processor_factory=lambda: st.session_state.processor,
         media_stream_constraints={"video": True, "audio": False},
         async_processing=True
     )
 
-    with st.spinner("Recording for 30 seconds. Please stay visible..."):
-        while not st.session_state.finished:
-            time.sleep(1)
+    # Show the timer 
+    countdown = st.empty()
+    status = st.empty()
 
-    # Upload results
-    requests.post(API_ENDPOINT, json={"student": "student_001", "emotions": emotion_counts})
-    st.success("Analysis complete and sent to server.")
+    while st.session_state.recording:
+        elapsed = time.time() - st.session_state.start_time
+        remaining = int(30 - elapsed)
+        if remaining > 0:
+            countdown.markdown(f"⏳ Time remaining: **{remaining} seconds**")
+            time.sleep(1)
+        else:
+            st.session_state.recording = False
+            countdown.empty()
+            status.markdown("⏹️ Stopping recording and analyzing...")
+            break
+
+    # Analyze and Upload
+    with st.spinner("Analyzing emotions..."):
+        frames = st.session_state.processor.frames
+        emotions = analyze_emotions(frames)
+        success = upload_to_api(emotions)
+
+        if success:
+            st.success("✅ Emotions uploaded successfully!")
+        else:
+            st.error("❌ Failed to upload emotions.")
