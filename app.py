@@ -48,7 +48,7 @@ def upload_to_api(emotion_results):
 
 # UI Surface
 st.set_page_config(page_title="Emotion Detection - Student")
-st.title("🎓 Emotion Detection - Student")
+st.title("Emotion Detection - Student")
 st.markdown("The system will use your webcam to analyze your emotion over 30 seconds. Please stay visible on camera.")
 
 # Video Capturing
@@ -92,6 +92,6 @@ if st.button("Start Emotion Analysis"):
         success = upload_to_api(emotions)
 
         if success:
-            st.success("✅ Emotions uploaded successfully!")
+            st.success("Emotions uploaded successfully!")
         else:
-            st.error("❌ Failed to upload emotions.")
+            st.error("Failed to upload emotions.")
