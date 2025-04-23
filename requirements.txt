@@ -1,8 +1,8 @@
-streamlit==1.20.0
-streamlit-webrtc==0.45.2
-opencv-python-headless==4.8.0.76
+streamlit==1.32.2
+streamlit-webrtc==0.46.0
+opencv-python-headless
 deepface==0.0.93
-tensorflow==2.10.0
+tensorflow==2.11.0
 keras==2.10.0
 protobuf==3.19.6
 numpy==1.23.5
