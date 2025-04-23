@@ -1,3 +1,4 @@
+from datetime import datetime
 import streamlit as st
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import av
@@ -6,62 +7,67 @@ import time
 import numpy as np
 from deepface import DeepFace
 import requests
-from datetime import datetime
 
+# ========== API ==========
 API_ENDPOINT = "https://student-api-emk4.onrender.com/upload"
 RTC_CONFIGURATION = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 
+# ========== Video Processor ==========
 class EmotionProcessor(VideoProcessorBase):
     def __init__(self):
-        self.records = []
+        self.frames = []
         self.last_capture_time = time.time()
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         now = time.time()
-        if now - self.last_capture_time >= 5 and len(self.records) < 6:
-            attention = self.estimate_attention(img)
-            timestamp = datetime.now().isoformat()
-            self.records.append({"frame": img, "timestamp": timestamp, "attention": attention})
+        if now - self.last_capture_time >= 5 and len(self.frames) < 6:
+            self.frames.append(img)
             self.last_capture_time = now
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-    def estimate_attention(self, frame):
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-        return min(len(faces), 1)  # 0 = inattentive, 1 = attentive
-
-def analyze_and_upload(records):
-    payload = []
-    for r in records:
+# ========== Emotion & Attention Analysis ==========
+def analyze_emotions_and_attention(frames):
+    emotions = []
+    attention_scores = []
+    for img in frames:
         try:
-            analysis = DeepFace.analyze(r["frame"], actions=['emotion'], enforce_detection=False)
+            analysis = DeepFace.analyze(img, actions=['emotion'], enforce_detection=False)
             emotion = analysis[0]['dominant_emotion'] if isinstance(analysis, list) else analysis['dominant_emotion']
+            emotions.append(emotion)
+            attention = 1 if emotion in ['happy', 'neutral', 'surprise'] else 0
+            attention_scores.append(attention)
         except:
-            emotion = "error"
-        payload.append({
-            "timestamp": r["timestamp"],
-            "attention": r["attention"],
-            "emotion": emotion
-        })
+            emotions.append("error")
+            attention_scores.append(0)
+    avg_attention = round(np.mean(attention_scores), 2) if attention_scores else 0
+    return emotions, avg_attention
 
+# ========== Upload to API ==========
+def upload_to_api(emotions, attention):
+    payload = {
+        "student_id": "student_001",
+        "emotions": emotions,
+        "attention": attention,
+        "timestamp": datetime.utcnow().isoformat()
+    }
     try:
-        res = requests.post(API_ENDPOINT, json={"student": "student_001", "records": payload})
+        res = requests.post(API_ENDPOINT, json=payload)
         return res.status_code == 200
     except:
         return False
 
-# Streamlit UI
+# ========== Streamlit UI ==========
 st.set_page_config(page_title="Emotion Detection - Student")
 st.title("Emotion Detection - Student")
-st.markdown("The system will use your webcam to analyze your emotion and attention over 30 seconds.")
+st.markdown("The system will use your webcam to analyze your emotion and attention over 30 seconds. Please stay visible on camera.")
 
 if "start" not in st.session_state:
     st.session_state.start = False
-
-if st.button("Start Emotion Analysis") and not st.session_state.start:
+if "processor" not in st.session_state:
     st.session_state.processor = EmotionProcessor()
+
+if st.button("Start Emotion & Attention Analysis") and not st.session_state.start:
     st.session_state.start = True
     st.session_state.start_time = time.time()
 
@@ -85,9 +91,12 @@ if st.button("Start Emotion Analysis") and not st.session_state.start:
     countdown.empty()
     status.markdown("⏹️ Stopping recording and analyzing...")
 
-    with st.spinner("Analyzing..."):
-        success = analyze_and_upload(st.session_state.processor.records)
+    with st.spinner("Analyzing emotions and attention..."):
+        frames = st.session_state.processor.frames
+        emotions, attention = analyze_emotions_and_attention(frames)
+        success = upload_to_api(emotions, attention)
+
         if success:
-            st.success("Uploaded emotion + attention successfully!")
+            st.success("Emotions and attention uploaded successfully!")
         else:
             st.error("Failed to upload data.")
