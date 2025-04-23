@@ -4,6 +4,7 @@ opencv-python-headless
 deepface==0.0.93
 tensorflow==2.10.1
 keras==2.10.0
+protobuf==3.19.6
 numpy==1.23.5
 requests
-protobuf==3.19.6
+vega_datasets
