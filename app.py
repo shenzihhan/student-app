@@ -7,54 +7,52 @@ import time
 import numpy as np
 from deepface import DeepFace
 import requests
-import threading
+from streamlit_extras.add_vertical_space import add_vertical_space
 
-# API settings
+# ========== API Settings ==========
 API_ENDPOINT = "https://student-api-emk4.onrender.com/upload"
 RTC_CONFIGURATION = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 
-# Session init
-if "start" not in st.session_state:
-    st.session_state.start = False
+# ========== Session State Setup ==========
+if "start_time" not in st.session_state:
+    st.session_state.start_time = None
+if "recording" not in st.session_state:
+    st.session_state.recording = False
 if "frames" not in st.session_state:
     st.session_state.frames = []
-if "progress" not in st.session_state:
-    st.session_state.progress = 0
+if "done" not in st.session_state:
+    st.session_state.done = False
+if "result" not in st.session_state:
+    st.session_state.result = None
 
-# Emotion Processor
+# ========== Emotion Processor ==========
 class EmotionProcessor(VideoProcessorBase):
     def __init__(self):
         self.last_capture_time = time.time()
-        self.capture_frames = True
 
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
         now = time.time()
 
-        if (
-            st.session_state.get("start", False)
-            and self.capture_frames
-            and len(st.session_state.frames) < 6
-            and now - self.last_capture_time >= 5
-        ):
-            try:
-                analysis = DeepFace.analyze(img, actions=["emotion"], enforce_detection=False)
-                result = analysis[0] if isinstance(analysis, list) else analysis
-                emotion = result["dominant_emotion"]
-                region = result.get("region", {})
-                x, y, w, h = region.get("x", 0), region.get("y", 0), region.get("w", 0), region.get("h", 0)
-                if w > 0 and h > 0:
-                    cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                    cv2.putText(img, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-                st.session_state.frames.append(img)
-            except Exception as e:
-                st.session_state.frames.append(img)
-            self.last_capture_time = now
+        if st.session_state.recording and len(st.session_state.frames) < 6:
+            if now - self.last_capture_time >= 5:
+                try:
+                    analysis = DeepFace.analyze(img, actions=["emotion"], enforce_detection=False)
+                    result = analysis[0] if isinstance(analysis, list) else analysis
+                    emotion = result["dominant_emotion"]
+                    region = result.get("region", {})
+                    x, y, w, h = region.get("x", 0), region.get("y", 0), region.get("w", 0), region.get("h", 0)
+                    if w > 0 and h > 0:
+                        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                        cv2.putText(img, emotion, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+                    st.session_state.frames.append(img)
+                except Exception:
+                    st.session_state.frames.append(img)
+                self.last_capture_time = now
 
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-
-# Analyze emotions
+# ========== Analysis Functions ==========
 def analyze_emotions_and_attention(frames):
     emotions = []
     attention_scores = []
@@ -67,10 +65,9 @@ def analyze_emotions_and_attention(frames):
         except:
             emotions.append("error")
             attention_scores.append(0)
-    avg_attention = round(np.mean(attention_scores), 2) if attention_scores else 0
+    avg_attention = round(np.mean(attention_scores), 2)
     return emotions, avg_attention
 
-# Upload to API
 def upload_to_api(emotions, attention):
     payload = {
         "student_id": "student_001",
@@ -84,58 +81,52 @@ def upload_to_api(emotions, attention):
     except:
         return False
 
-# Countdown worker
-def run_countdown_and_process():
-    for i in range(30):
-        st.session_state.progress = i + 1
-        time.sleep(1)
-
-    st.session_state.start = False
-    processor.capture_frames = False
-    emotions, attention = analyze_emotions_and_attention(st.session_state.frames)
-    success = upload_to_api(emotions, attention)
-    st.session_state.result = ("success", emotions, attention) if success else ("fail", [], 0)
-
-# Page setup
+# ========== Streamlit UI ==========
 st.set_page_config(page_title="Emotion Detection - Student")
 st.title("Emotion Detection - Student")
-st.markdown("""
-🎥 The system will use your webcam to analyze your **emotion and attention** over 30 seconds.  
-✅ After selecting webcam, press **Start Emotion & Attention Analysis** button to begin.
-""")
+st.markdown("Select webcam device below and press **Start Emotion & Attention Analysis**.")
 
-# Streamlit component
-processor = EmotionProcessor()
+add_vertical_space(1)
+
 webrtc_ctx = webrtc_streamer(
     key="emotion",
     mode=WebRtcMode.SENDRECV,
     rtc_configuration=RTC_CONFIGURATION,
-    video_processor_factory=lambda: processor,
+    video_processor_factory=EmotionProcessor,
     media_stream_constraints={"video": True, "audio": False},
     async_processing=True,
 )
 
-# UI elements
-progress_bar = st.progress(0, text="⌛ Waiting to start...")
-start_button = st.button("▶️ Start Emotion & Attention Analysis")
-
-# On start
-if start_button and webrtc_ctx.state.playing:
+if st.button("▶Start Emotion & Attention Analysis") and webrtc_ctx.state.playing:
+    st.session_state.start_time = time.time()
+    st.session_state.recording = True
     st.session_state.frames = []
-    st.session_state.progress = 0
-    st.session_state.start = True
-    processor.capture_frames = True
-    threading.Thread(target=run_countdown_and_process, daemon=True).start()
+    st.session_state.done = False
+    st.session_state.result = None
 
-# Show progress
-if st.session_state.start:
-    progress_bar.progress(st.session_state.progress / 30.0, text=f"⏳ {30 - st.session_state.progress} seconds remaining")
-
-# Show results
-if "result" in st.session_state and not st.session_state.start:
-    outcome, emotions, attention = st.session_state.result
-    if outcome == "success":
-        st.success(f"Uploaded successfully! Attention Score: **{attention}**")
-        st.write("Detected Emotions:", emotions)
+# ========== Timer & Progress ==========
+if st.session_state.recording:
+    elapsed = time.time() - st.session_state.start_time
+    if elapsed < 30:
+        st.progress(elapsed / 30.0, f"⏳ {30 - int(elapsed)} seconds remaining")
     else:
-        st.error("Failed to upload emotion data.")
+        st.session_state.recording = False
+        st.session_state.done = True
+        st.success("Recording complete. Analyzing...")
+
+# ========== After Analysis ==========
+if st.session_state.done and st.session_state.result is None:
+    with st.spinner("Analyzing emotions..."):
+        emotions, attention = analyze_emotions_and_attention(st.session_state.frames)
+        success = upload_to_api(emotions, attention)
+        st.session_state.result = (emotions, attention, success)
+
+if st.session_state.result:
+    emotions, attention, success = st.session_state.result
+    st.markdown(f"**Average Attention Score:** {attention}")
+    st.markdown(f"**Detected Emotions:** {emotions}")
+    if success:
+        st.success("Uploaded to teacher dashboard.")
+    else:
+        st.error("Upload failed. Try again.")
+
