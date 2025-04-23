@@ -57,21 +57,23 @@ def upload_to_api(emotions, attention):
     except:
         return False
 
-# ========== Streamlit UI ==========
+# ========== UI ==========
 st.set_page_config(page_title="Emotion Detection - Student")
 st.title("Emotion Detection - Student")
 st.markdown("The system will use your webcam to analyze your emotion and attention over 30 seconds. Please stay visible on camera.")
 
+# Init session state
 if "start" not in st.session_state:
     st.session_state.start = False
+if "start_time" not in st.session_state:
+    st.session_state.start_time = None
+if "completed" not in st.session_state:
+    st.session_state.completed = False
 if "processor" not in st.session_state:
     st.session_state.processor = EmotionProcessor()
 
-if st.button("Start Emotion & Attention Analysis") and not st.session_state.start:
-    st.session_state.start = True
-    st.session_state.start_time = time.time()
-    
-    webrtc_ctx = webrtc_streamer(
+# WebRTC camera streaming
+webrtc_ctx = webrtc_streamer(
     key="emotion",
     mode=WebRtcMode.SENDRECV,
     rtc_configuration=RTC_CONFIGURATION,
@@ -79,23 +81,33 @@ if st.button("Start Emotion & Attention Analysis") and not st.session_state.star
     media_stream_constraints={"video": True, "audio": False},
     async_processing=True
 )
-    countdown = st.empty()
-    status = st.empty()
 
-    while time.time() - st.session_state.start_time < 30:
-        remaining = int(30 - (time.time() - st.session_state.start_time))
+# Start button
+if st.button("Start Emotion & Attention Analysis") and webrtc_ctx.state.playing:
+    st.session_state.start = True
+    st.session_state.start_time = time.time()
+    st.session_state.completed = False
+
+# Countdown timer
+countdown = st.empty()
+status = st.empty()
+
+if st.session_state.start and not st.session_state.completed:
+    elapsed = time.time() - st.session_state.start_time
+    if elapsed < 30:
+        remaining = int(30 - elapsed)
         countdown.markdown(f"⏳ Time remaining: **{remaining} seconds**")
-        time.sleep(1)
+    else:
+        st.session_state.completed = True
+        countdown.empty()
+        status.markdown("⏹️ Stopping recording and analyzing...")
 
-    countdown.empty()
-    status.markdown("⏹️ Stopping recording and analyzing...")
+        with st.spinner("Analyzing emotions and attention..."):
+            frames = st.session_state.processor.frames
+            emotions, attention = analyze_emotions_and_attention(frames)
+            success = upload_to_api(emotions, attention)
 
-    with st.spinner("Analyzing emotions and attention..."):
-        frames = st.session_state.processor.frames
-        emotions, attention = analyze_emotions_and_attention(frames)
-        success = upload_to_api(emotions, attention)
-
-        if success:
-            st.success("Emotions and attention uploaded successfully!")
-        else:
-            st.error("Failed to upload data.")
+            if success:
+                st.success("Emotions and attention uploaded successfully!")
+            else:
+                st.error("Failed to upload data.")
