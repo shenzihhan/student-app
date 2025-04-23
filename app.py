@@ -70,16 +70,15 @@ if "processor" not in st.session_state:
 if st.button("Start Emotion & Attention Analysis") and not st.session_state.start:
     st.session_state.start = True
     st.session_state.start_time = time.time()
-
+    
     webrtc_ctx = webrtc_streamer(
-        key="emotion",
-        mode="SENDRECV",
-        rtc_configuration=RTC_CONFIGURATION,
-        video_processor_factory=lambda: st.session_state.processor,
-        media_stream_constraints={"video": True, "audio": False},
-        async_processing=True
-    )
-
+    key="emotion",
+    mode=WebRtcMode.SENDRECV,
+    rtc_configuration=RTC_CONFIGURATION,
+    video_processor_factory=lambda: st.session_state.processor,
+    media_stream_constraints={"video": True, "audio": False},
+    async_processing=True
+)
     countdown = st.empty()
     status = st.empty()
 
