@@ -1,18 +1,19 @@
 import streamlit as st
-import time
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import av
+import cv2
+import time
 import numpy as np
 from deepface import DeepFace
 import requests
-import cv2
 
+# ========== API 目標 ==========
 API_ENDPOINT = "https://student-api-emk4.onrender.com/upload"
 
-RTC_CONFIGURATION = {
-    "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-}
+# ========== WebRTC 設定 ==========
+RTC_CONFIGURATION = {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 
+# ========== 視訊處理器 ==========
 class EmotionProcessor(VideoProcessorBase):
     def __init__(self):
         self.frames = []
@@ -26,6 +27,7 @@ class EmotionProcessor(VideoProcessorBase):
             self.last_capture_time = now
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
+# ========== 分析情緒 ==========
 def analyze_emotions(frames):
     results = []
     for img in frames:
@@ -37,67 +39,57 @@ def analyze_emotions(frames):
             results.append("error")
     return results
 
+# ========== 傳送到 API ==========
 def upload_to_api(emotion_results):
-    data = {"emotions": emotion_results}
     try:
-        response = requests.post(API_ENDPOINT, json=data)
-        return response.status_code == 200
+        res = requests.post(API_ENDPOINT, json={"emotions": emotion_results})
+        return res.status_code == 200
     except:
         return False
 
-# UI Configuration
+# ========== Streamlit 介面 ==========
 st.set_page_config(page_title="Emotion Detection - Student")
 st.title("Emotion Detection - Student")
 st.markdown("The system will use your webcam to analyze your emotion over 30 seconds. Please stay visible on camera.")
 
-# Initialize session state variables
-if 'recording' not in st.session_state:
-    st.session_state.recording = False
-if 'start_time' not in st.session_state:
-    st.session_state.start_time = None
-if 'processor' not in st.session_state:
-    st.session_state.processor = None
-
-# Start button
-start_btn = st.button("Start Emotion Analysis")
-
-if start_btn:
-    st.session_state.recording = True
-    st.session_state.start_time = time.time()
+# 初始化狀態變數
+if "start" not in st.session_state:
+    st.session_state.start = False
+if "processor" not in st.session_state:
     st.session_state.processor = EmotionProcessor()
 
-# Only run WebRTC if recording has started
-if st.session_state.recording and st.session_state.processor is not None:
+# 按鈕觸發
+if st.button("Start Emotion Analysis") and not st.session_state.start:
+    st.session_state.start = True
+    st.session_state.start_time = time.time()
+
     webrtc_ctx = webrtc_streamer(
         key="emotion",
+        mode="SENDRECV",
+        rtc_configuration=RTC_CONFIGURATION,
         video_processor_factory=lambda: st.session_state.processor,
         media_stream_constraints={"video": True, "audio": False},
-        async_processing=True,
-        rtc_configuration=RTC_CONFIGURATION
+        async_processing=True
     )
 
     countdown = st.empty()
     status = st.empty()
 
-    while st.session_state.recording:
-        elapsed = time.time() - st.session_state.start_time
-        remaining = int(30 - elapsed)
-        if remaining > 0:
-            countdown.markdown(f"⏳ Time remaining: **{remaining} seconds**")
-            time.sleep(1)
-        else:
-            st.session_state.recording = False
-            countdown.empty()
-            status.markdown("⏹️ Stopping recording and analyzing...")
-            break
+    while time.time() - st.session_state.start_time < 30:
+        remaining = int(30 - (time.time() - st.session_state.start_time))
+        countdown.markdown(f"⏳ Time remaining: **{remaining} seconds**")
+        time.sleep(1)
 
-    # Post-recording: Analyze and upload
+    # 分析並上傳結果
+    countdown.empty()
+    status.markdown("⏹️ Stopping recording and analyzing...")
+
     with st.spinner("Analyzing emotions..."):
         frames = st.session_state.processor.frames
         emotions = analyze_emotions(frames)
         success = upload_to_api(emotions)
 
         if success:
-            st.success("Emotions uploaded successfully!")
+            st.success("✅ Emotions uploaded successfully!")
         else:
-            st.error("Failed to upload emotions.")
+            st.error("❌ Failed to upload emotions.")
