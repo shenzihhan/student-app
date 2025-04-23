@@ -7,7 +7,6 @@ import time
 import numpy as np
 from deepface import DeepFace
 import requests
-from streamlit_extras.add_vertical_space import add_vertical_space
 
 # ========== API Settings ==========
 API_ENDPOINT = "https://student-api-emk4.onrender.com/upload"
@@ -85,8 +84,6 @@ def upload_to_api(emotions, attention):
 st.set_page_config(page_title="Emotion Detection - Student")
 st.title("Emotion Detection - Student")
 st.markdown("Select webcam device below and press **Start Emotion & Attention Analysis**.")
-
-add_vertical_space(1)
 
 webrtc_ctx = webrtc_streamer(
     key="emotion",
